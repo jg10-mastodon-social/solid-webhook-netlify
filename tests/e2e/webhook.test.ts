@@ -109,4 +109,91 @@ describe('webhook e2e tests', () => {
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*')
     expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS')
   })
+
+  it('returns JWKS from public/jwks.json', async () => {
+    const res = await fetch(`${DEV_URL}/jwks.json`)
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Content-Type')?.startsWith('application/json')).toBe(true)
+
+    const jwks = await res.json()
+    expect(jwks).toHaveProperty('keys')
+    expect(Array.isArray(jwks.keys)).toBe(true)
+    expect(jwks.keys.length).toBeGreaterThan(0)
+
+    const key = jwks.keys[0]
+    expect(key).toHaveProperty('kty', 'EC')
+    expect(key).toHaveProperty('crv', 'P-256')
+    expect(key).toHaveProperty('x')
+    expect(key).toHaveProperty('y')
+    expect(key).toHaveProperty('kid')
+    expect(key).toHaveProperty('alg', 'ES256')
+    expect(key).toHaveProperty('use', 'sig')
+
+    // Should NOT contain private key fields
+    expect(key).not.toHaveProperty('d')
+    expect(key).not.toHaveProperty('dp')
+    expect(key).not.toHaveProperty('dq')
+    expect(key).not.toHaveProperty('p')
+    expect(key).not.toHaveProperty('q')
+  })
+
+  it('returns 500 when config fetch fails with 404', async () => {
+    const fs = await import('fs')
+    const { importJWK, SignJWT, calculateJwkThumbprint, generateKeyPair, exportJWK } = await import('jose')
+    const { randomUUID, createHash } = await import('crypto')
+
+    const jwksEnv = fs.readFileSync('./.env', 'utf-8')
+    const jwksMatch = jwksEnv.match(/^JWKS=(.+)$/m)
+    if (!jwksMatch) {
+      throw new Error('JWKS not found in .env')
+    }
+    const identityKey = JSON.parse(jwksMatch[1])
+    const identityPrivateKey = await importJWK(identityKey, 'ES256')
+    const identityKid = identityKey.kid
+
+    const dpopKeyPair = await generateKeyPair('ES256', { crv: 'P-256' })
+    const dpopPublicJwk = await exportJWK(dpopKeyPair.publicKey)
+    dpopPublicJwk.kid = createHash('sha256')
+      .update(JSON.stringify(dpopPublicJwk))
+      .digest('base64url')
+    dpopPublicJwk.alg = 'ES256'
+    const jkt = await calculateJwkThumbprint(dpopPublicJwk, 'sha256')
+
+    const now = Math.floor(Date.now() / 1000)
+
+    const token = await new SignJWT({
+      webid: 'http://localhost:9999/webid',
+      sub: 'http://localhost:9999/webid',
+      cnf: { jkt },
+    })
+      .setProtectedHeader({ alg: 'ES256', typ: 'at+jwt', kid: identityKid })
+      .setIssuedAt(now)
+      .setExpirationTime(now + 3600)
+      .setAudience('solid')
+      .setIssuer('http://localhost:9999')
+      .setJti(randomUUID())
+      .sign(identityPrivateKey)
+
+    const dpopHeader = await new SignJWT({
+      htu: 'http://localhost:9999/webhook',
+      htm: 'POST',
+      jti: randomUUID(),
+    })
+      .setProtectedHeader({ alg: 'ES256', typ: 'dpop+jwt', jwk: dpopPublicJwk })
+      .setIssuedAt(now)
+      .sign(dpopKeyPair.privateKey)
+
+    const res = await fetch(`${DEV_URL}/webhook`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'authorization': `DPoP ${token}`,
+        'dpop': dpopHeader
+      }
+    })
+
+    expect(res.status).toBe(500)
+    expect(await res.text()).toContain('404')
+  })
 })

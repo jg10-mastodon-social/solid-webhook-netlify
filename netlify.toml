@@ -10,8 +10,8 @@
   BASE_URL = "http://localhost:9999"
   WEBID = "http://localhost:9999/webid"
   ISSUER = "http://localhost:9999"
-  WHITELISTED_ISSUERS = "https://issuer.example"
-  WEBHOOK_CONFIG_URL = "https://pod.example.com/settings/webhooks.ttl"
+  WHITELISTED_ISSUERS = "http://localhost:9999"
+  WEBHOOK_CONFIG_URL = "http://localhost:9999/webhooks.ttl"
   HANDLER_BASE_URL = "https://example.com/handlers#"
   SEND_TO_URL = "http://localhost:9999/webhook"
 
