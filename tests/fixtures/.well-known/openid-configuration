@@ -1,0 +1,8 @@
+{
+  "issuer": "http://localhost:8888",
+  "authorization_endpoint": "http://localhost:8888/authorize",
+  "token_endpoint": "http://localhost:8888/token",
+  "jwks_uri": "http://localhost:8888/.well-known/jwks.json",
+  "solid_oidc_supported": true,
+  "solid_oidc_version": "1.0.0"
+}

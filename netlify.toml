@@ -1,0 +1,29 @@
+[build]
+  command = "npm run generate:identity && tsc"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[dev]
+  command = "echo 'No dev server needed'"
+  port = 8888
+  targetPort = 8888
+
+[[redirects]]
+  from = "/webhook"
+  to = "/.netlify/functions/webhook"
+  status = 200
+
+[[redirects]]
+  from = "/.well-known/openid-configuration"
+  to = "/.well-known/openid-configuration"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/.well-known/webid"
+  to = "/.well-known/webid"
+  status = 200
+  force = true
