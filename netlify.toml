@@ -1,29 +1,20 @@
 [build]
-  command = "npm run generate:identity && tsc"
-  publish = "dist"
+  command = "node scripts/generate-identity.ts"
+  publish = "public"
 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[context.dev.environment]
+  BASE_URL = "http://localhost:9999"
+  WEBID = "http://localhost:9999/webid"
+  ISSUER = "http://localhost:9999"
+  WHITELISTED_ISSUERS = "https://issuer.example"
+  WEBHOOK_CONFIG_URL = "https://pod.example.com/settings/webhooks.ttl"
+  HANDLER_BASE_URL = "https://example.com/handlers#"
+  SEND_TO_URL = "http://localhost:9999/webhook"
+
 [dev]
-  command = "echo 'No dev server needed'"
-  port = 8888
-  targetPort = 8888
-
-[[redirects]]
-  from = "/webhook"
-  to = "/.netlify/functions/webhook"
-  status = 200
-
-[[redirects]]
-  from = "/.well-known/openid-configuration"
-  to = "/.well-known/openid-configuration"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/.well-known/webid"
-  to = "/.well-known/webid"
-  status = 200
-  force = true
+  port = 9999
+  framework = "#static"

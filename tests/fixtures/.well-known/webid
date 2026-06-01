@@ -1,5 +1,0 @@
-@prefix solid: <http://www.w3.org/ns/solid/terms#>.
-@prefix oidc: <http://www.w3.org/ns/solid/oidc#>.
-
-<http://localhost:8888/webid> a <http://www.w3.org/2005/Incubator/w3c/Alice/WebID/1.0#Agent>.
-<http://localhost:8888/webid> solid:oidcIssuer <http://localhost:8888>.
