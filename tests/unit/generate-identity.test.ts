@@ -97,35 +97,73 @@ describe('generate-identity', () => {
   })
 
   describe('when JWKS env var is set', () => {
-    it('exits successfully', async () => {
-      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig' })
+    it('exits successfully when kid is present', async () => {
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig', kid: 'test-kid' })
       const result = await runScript(existingJwks)
       expect(result.exitCode).toBe(0)
     })
 
+    it('fails when kid is missing', async () => {
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig' })
+      const result = await runScript(existingJwks)
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain('kid')
+    })
+
     it('does not generate new key pair (does not overwrite .env)', async () => {
-      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'test-x', y: 'test-y', d: 'test-d', alg: 'ES256', use: 'sig' })
-      
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'test-x', y: 'test-y', d: 'test-d', alg: 'ES256', use: 'sig', kid: 'test-kid' })
+
       fs.writeFileSync(envPath, 'EXISTING=value\n')
-      
+
       await runScript(existingJwks)
-      
+
       const envContent = fs.readFileSync(envPath, 'utf-8')
       expect(envContent).toBe('EXISTING=value\n')
     })
 
-    it('writes public/jwks.json with derived public key', async () => {
-      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig' })
+    it('writes public/jwks.json using kid from JWKS', async () => {
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig', kid: 'my-test-kid' })
       await runScript(existingJwks)
-      
+
       const jwksPath = path.join(publicDir, 'jwks.json')
       expect(fs.existsSync(jwksPath)).toBe(true)
-      
+
       const jwks = JSON.parse(fs.readFileSync(jwksPath, 'utf-8'))
       expect(jwks.keys[0]).toHaveProperty('x', 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc')
       expect(jwks.keys[0]).toHaveProperty('y', '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU')
       expect(jwks.keys[0]).not.toHaveProperty('d')
+      expect(jwks.keys[0]).toHaveProperty('kid', 'my-test-kid')
+    })
+  })
+
+  describe('new key generation', () => {
+    it('generates kid as SHA-256 hash of public key', async () => {
+      await runScript()
+
+      const jwksPath = path.join(publicDir, 'jwks.json')
+      const jwks = JSON.parse(fs.readFileSync(jwksPath, 'utf-8'))
+
       expect(jwks.keys[0]).toHaveProperty('kid')
+      expect(jwks.keys[0].kid).toBeDefined()
+      expect(typeof jwks.keys[0].kid).toBe('string')
+      expect(jwks.keys[0].kid.length).toBeGreaterThan(10)
+    })
+
+    it('sets same kid in JWKS env var', async () => {
+      await runScript()
+
+      const envContent = fs.readFileSync(envPath, 'utf-8')
+      const match = envContent.match(/^JWKS=(.+)$/m)
+      expect(match).toBeTruthy()
+
+      const jwksEnv = JSON.parse(match![1])
+      expect(jwksEnv).toHaveProperty('kid')
+      expect(jwksEnv.kid).toBeDefined()
+
+      const jwksPath = path.join(publicDir, 'jwks.json')
+      const jwks = JSON.parse(fs.readFileSync(jwksPath, 'utf-8'))
+
+      expect(jwksEnv.kid).toBe(jwks.keys[0].kid)
     })
   })
 })

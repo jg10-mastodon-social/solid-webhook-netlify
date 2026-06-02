@@ -14,9 +14,15 @@ async function getJwksPrivateKey() {
     }
     try {
       const jwks = JSON.parse(jwksEnv)
+      if (!jwks.kid) {
+        throw new Error('JWKS missing required kid field')
+      }
       jwksPrivateKey = await importJWK(jwks, 'ES256')
       jwksKid = jwks.kid
-    } catch {
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('kid')) {
+        throw e
+      }
       throw new Error('Failed to parse JWKS environment variable')
     }
   }

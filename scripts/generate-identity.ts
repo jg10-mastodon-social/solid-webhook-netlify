@@ -21,14 +21,15 @@ const webId = process.env.WEBID || `${baseUrl}/webid`
 const issuer = process.env.ISSUER || baseUrl
 
 function derivePublicJwk(privateJwk: Record<string, unknown>): Record<string, unknown> {
+  if (!privateJwk.kid) {
+    throw new Error('JWKS missing required kid field')
+  }
   const { d, dp, dq, p, q, ...publicFields } = privateJwk
   return {
     ...publicFields,
     use: 'sig',
     alg: 'ES256',
-    kid: createHash('sha256')
-      .update(JSON.stringify(publicFields))
-      .digest('base64url'),
+    kid: privateJwk.kid,
   }
 }
 
@@ -46,16 +47,29 @@ async function generateIdentity() {
   if (existingJwks) {
     console.log('Using existing JWKS from environment variable')
     const parsed = JSON.parse(existingJwks)
+    if (!parsed.kid) {
+      throw new Error('JWKS missing required kid field')
+    }
     const importedKey = await importJWK(parsed, 'ES256')
     const fullJwk = await exportJWK(importedKey)
-    publicJwk = derivePublicJwk(fullJwk as Record<string, unknown>)
-    privateJwk = fullJwk as Record<string, unknown>
+    privateJwk = { ...fullJwk, kid: parsed.kid }
+    publicJwk = {
+      kty: fullJwk.kty,
+      crv: fullJwk.crv,
+      x: fullJwk.x,
+      y: fullJwk.y,
+      use: 'sig',
+      alg: 'ES256',
+      kid: parsed.kid,
+    }
   } else {
     console.log('Generating new key pair')
     const { publicKey, privateKey } = await generateKeyPair('ES256', { crv: 'P-256' })
 
     publicJwk = await exportJWK(publicKey)
-    publicJwk.kid = publicJwk.kid || Buffer.from(JSON.stringify(publicJwk)).toString('base64url').slice(0, 16)
+    publicJwk.kid = createHash('sha256')
+      .update(JSON.stringify(publicJwk))
+      .digest('base64url')
     publicJwk.alg = 'ES256'
     publicJwk.use = 'sig'
 

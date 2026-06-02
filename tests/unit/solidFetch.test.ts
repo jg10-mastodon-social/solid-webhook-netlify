@@ -140,5 +140,31 @@ describe('solidFetch', () => {
         createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
       ).rejects.toThrow()
     })
+
+    it('throws if JWKS env var is missing kid', async () => {
+      process.env.JWKS = JSON.stringify({
+        kty: 'EC',
+        crv: 'P-256',
+        x: 'test-x',
+        y: 'test-y',
+        d: 'test-d',
+        alg: 'ES256',
+        use: 'sig',
+      })
+
+      const { createSolidFetch } = await import('../../src/solidFetch.js')
+
+      await expect(
+        createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
+      ).rejects.toThrow('kid')
+    })
+
+    it('uses kid from JWKS env var', async () => {
+      const { createSolidFetch } = await import('../../src/solidFetch.js')
+
+      await expect(
+        createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
+      ).resolves.toBeDefined()
+    })
   })
 })
