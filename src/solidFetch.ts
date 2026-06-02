@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { SolidFetch } from './types.js'
 
 let jwksPrivateKey: Awaited<ReturnType<typeof importJWK>> | undefined
+let jwksKid: string | undefined
 
 async function getJwksPrivateKey() {
   if (!jwksPrivateKey) {
@@ -14,6 +15,7 @@ async function getJwksPrivateKey() {
     try {
       const jwks = JSON.parse(jwksEnv)
       jwksPrivateKey = await importJWK(jwks, 'ES256')
+      jwksKid = jwks.kid
     } catch {
       throw new Error('Failed to parse JWKS environment variable')
     }
@@ -32,7 +34,7 @@ export async function createSolidFetch(webId: string, issuer: string): Promise<S
     sub: webId,
     cnf: { jkt },
   })
-    .setProtectedHeader({ alg: 'ES256', typ: 'at+jwt' })
+    .setProtectedHeader({ alg: 'ES256', typ: 'at+jwt', kid: jwksKid })
     .setIssuedAt(now)
     .setExpirationTime(now + 3600)
     .setAudience('solid')
