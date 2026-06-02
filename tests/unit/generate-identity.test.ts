@@ -1,0 +1,131 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { spawn } from 'child_process'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const rootDir = path.resolve(__dirname, '../..')
+
+describe('generate-identity', () => {
+  const publicDir = path.join(rootDir, 'public')
+  const envPath = path.join(rootDir, '.env')
+
+  beforeEach(() => {
+    if (fs.existsSync(publicDir)) {
+      fs.rmSync(publicDir, { recursive: true, force: true })
+    }
+    if (fs.existsSync(envPath)) {
+      fs.unlinkSync(envPath)
+    }
+  })
+
+  afterEach(() => {
+    if (fs.existsSync(publicDir)) {
+      fs.rmSync(publicDir, { recursive: true, force: true })
+    }
+  })
+
+  async function runScript(jwks?: string): Promise<{ exitCode: number, stdout: string, stderr: string }> {
+    return new Promise((resolve) => {
+      const env = {
+        ...process.env,
+        BASE_URL: 'http://localhost:9999',
+        WEBID: 'http://localhost:9999/webid',
+        ISSUER: 'http://localhost:9999',
+      }
+      if (jwks) {
+        env.JWKS = jwks
+      }
+
+      const child = spawn('node', [path.join(__dirname, '../../scripts/generate-identity.ts')], {
+        env,
+        stdio: 'pipe',
+      })
+
+      let stdout = ''
+      let stderr = ''
+      child.stdout?.on('data', (data) => { stdout += data.toString() })
+      child.stderr?.on('data', (data) => { stderr += data.toString() })
+      child.on('close', (exitCode) => {
+        resolve({ exitCode: exitCode ?? 0, stdout, stderr })
+      })
+    })
+  }
+
+  describe('when JWKS env var is not set', () => {
+    it('exits successfully', async () => {
+      const result = await runScript()
+      expect(result.exitCode).toBe(0)
+      expect(result.stderr).not.toContain('Error')
+    })
+
+    it('generates new key pair', async () => {
+      await runScript()
+      
+      expect(fs.existsSync(envPath)).toBe(true)
+      const envContent = fs.readFileSync(envPath, 'utf-8')
+      expect(envContent).toContain('JWKS=')
+    })
+
+    it('writes public/jwks.json', async () => {
+      await runScript()
+      
+      const jwksPath = path.join(publicDir, 'jwks.json')
+      expect(fs.existsSync(jwksPath)).toBe(true)
+      
+      const jwks = JSON.parse(fs.readFileSync(jwksPath, 'utf-8'))
+      expect(jwks).toHaveProperty('keys')
+      expect(Array.isArray(jwks.keys)).toBe(true)
+      expect(jwks.keys.length).toBe(1)
+      expect(jwks.keys[0]).toHaveProperty('kty', 'EC')
+      expect(jwks.keys[0]).toHaveProperty('crv', 'P-256')
+      expect(jwks.keys[0]).toHaveProperty('x')
+      expect(jwks.keys[0]).toHaveProperty('y')
+      expect(jwks.keys[0]).not.toHaveProperty('d')
+    })
+
+    it('writes public/webid', async () => {
+      await runScript()
+      
+      const webidPath = path.join(publicDir, 'webid')
+      expect(fs.existsSync(webidPath)).toBe(true)
+      const content = fs.readFileSync(webidPath, 'utf-8')
+      expect(content).toContain('http://localhost:9999/webid')
+    })
+  })
+
+  describe('when JWKS env var is set', () => {
+    it('exits successfully', async () => {
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig' })
+      const result = await runScript(existingJwks)
+      expect(result.exitCode).toBe(0)
+    })
+
+    it('does not generate new key pair (does not overwrite .env)', async () => {
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'test-x', y: 'test-y', d: 'test-d', alg: 'ES256', use: 'sig' })
+      
+      fs.writeFileSync(envPath, 'EXISTING=value\n')
+      
+      await runScript(existingJwks)
+      
+      const envContent = fs.readFileSync(envPath, 'utf-8')
+      expect(envContent).toBe('EXISTING=value\n')
+    })
+
+    it('writes public/jwks.json with derived public key', async () => {
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig' })
+      await runScript(existingJwks)
+      
+      const jwksPath = path.join(publicDir, 'jwks.json')
+      expect(fs.existsSync(jwksPath)).toBe(true)
+      
+      const jwks = JSON.parse(fs.readFileSync(jwksPath, 'utf-8'))
+      expect(jwks.keys[0]).toHaveProperty('x', 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc')
+      expect(jwks.keys[0]).toHaveProperty('y', '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU')
+      expect(jwks.keys[0]).not.toHaveProperty('d')
+      expect(jwks.keys[0]).toHaveProperty('kid')
+    })
+  })
+})

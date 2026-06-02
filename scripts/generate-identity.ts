@@ -1,7 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { generateKeyPair, exportJWK } from 'jose'
+import { generateKeyPair, exportJWK, importJWK } from 'jose'
+import { createHash } from 'node:crypto'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -19,23 +20,50 @@ if (!baseUrl) {
 const webId = process.env.WEBID || `${baseUrl}/webid`
 const issuer = process.env.ISSUER || baseUrl
 
+function derivePublicJwk(privateJwk: Record<string, unknown>): Record<string, unknown> {
+  const { d, dp, dq, p, q, ...publicFields } = privateJwk
+  return {
+    ...publicFields,
+    use: 'sig',
+    alg: 'ES256',
+    kid: createHash('sha256')
+      .update(JSON.stringify(publicFields))
+      .digest('base64url'),
+  }
+}
+
 async function generateIdentity() {
   console.log(`Generating identity files`)
   console.log(`BASE_URL: ${baseUrl}`)
   console.log(`WEBID: ${webId}`)
   console.log(`ISSUER: ${issuer}`)
 
-  const { publicKey, privateKey } = await generateKeyPair('ES256', { crv: 'P-256' })
+  let publicJwk: Record<string, unknown>
+  let privateJwk: Record<string, unknown>
 
-  const publicJwk = await exportJWK(publicKey)
-  publicJwk.kid = publicJwk.kid || Buffer.from(JSON.stringify(publicJwk)).toString('base64url').slice(0, 16)
-  publicJwk.alg = 'ES256'
-  publicJwk.use = 'sig'
+  const existingJwks = process.env.JWKS
 
-  const privateJwk = await exportJWK(privateKey)
-  privateJwk.kid = publicJwk.kid
-  privateJwk.alg = 'ES256'
-  privateJwk.use = 'sig'
+  if (existingJwks) {
+    console.log('Using existing JWKS from environment variable')
+    const parsed = JSON.parse(existingJwks)
+    const importedKey = await importJWK(parsed, 'ES256')
+    const fullJwk = await exportJWK(importedKey)
+    publicJwk = derivePublicJwk(fullJwk as Record<string, unknown>)
+    privateJwk = fullJwk as Record<string, unknown>
+  } else {
+    console.log('Generating new key pair')
+    const { publicKey, privateKey } = await generateKeyPair('ES256', { crv: 'P-256' })
+
+    publicJwk = await exportJWK(publicKey)
+    publicJwk.kid = publicJwk.kid || Buffer.from(JSON.stringify(publicJwk)).toString('base64url').slice(0, 16)
+    publicJwk.alg = 'ES256'
+    publicJwk.use = 'sig'
+
+    privateJwk = await exportJWK(privateKey)
+    privateJwk.kid = publicJwk.kid
+    privateJwk.alg = 'ES256'
+    privateJwk.use = 'sig'
+  }
 
   fs.mkdirSync(publicDir, { recursive: true })
 
@@ -69,16 +97,18 @@ async function generateIdentity() {
   fs.writeFileSync(webidPath, webidTurtle)
   console.log(`Written: ${webidPath}`)
 
-  let envContent = ''
-  if (fs.existsSync(envPath)) {
-    envContent = fs.readFileSync(envPath, 'utf-8')
-    const lines = envContent.split('\n').filter(line => !line.startsWith('JWKS='))
-    envContent = lines.join('\n') + '\n'
-  }
+  if (!existingJwks) {
+    let envContent = ''
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf-8')
+      const lines = envContent.split('\n').filter(line => !line.startsWith('JWKS='))
+      envContent = lines.join('\n') + '\n'
+    }
 
-  const jwksEnvVar = `JWKS=${JSON.stringify(privateJwk)}`
-  fs.writeFileSync(envPath, envContent + jwksEnvVar + '\n')
-  console.log(`Written: ${envPath} (JWKS env var)`)
+    const jwksEnvVar = `JWKS=${JSON.stringify(privateJwk)}`
+    fs.writeFileSync(envPath, envContent + jwksEnvVar + '\n')
+    console.log(`Written: ${envPath} (JWKS env var)`)
+  }
 
   console.log('Identity files generated successfully')
 }
