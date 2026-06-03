@@ -2,6 +2,8 @@
 
 ![No maintenance intended](https://img.shields.io/badge/no_maintenance_intended-orange) ![Code quality: TDD vibe coded](https://img.shields.io/badge/code_quality-TDD_vibe_coded-orange)
 
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/jg10-mastodon-social/solid-webhook-netlify#WHITELISTED_ISSUERS=&WEBHOOK_CONFIG_URL=&HANDLER_BASE_URL=https://example.com/handlers%23)
+
 Solid pod webhook listener using Netlify Functions. Verifies incoming webhook DPoP tokens and performs authenticated fetches to a Solid pod.
 
 ## Prerequisites
