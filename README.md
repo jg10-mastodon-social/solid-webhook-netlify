@@ -14,17 +14,18 @@ Solid pod webhook listener using Netlify Functions. Verifies incoming webhook DP
 ```bash
 npm install
 
-netlify build --context=dev 
+netlify build --context=dev
 ```
 
-Generates identity files in public/
-Uses private key in JWKS env variable if defined, or writes a new one to .env
+Build time generates:
+- `src/base-url.ts` - site URL (gitignored)
+- `src/private-key.ts` - private key for signing (gitignored)
+- `public/webid`, `public/jwks.json`, `public/.well-known/openid-configuration` - public identity files
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BASE_URL` | Yes | Your Netlify site URL |
 | `WHITELISTED_ISSUERS` | Yes | Comma-separated list of trusted OIDC issuers |
 | `WEBHOOK_CONFIG_URL` | Yes | URL to your webhook RDF configuration |
 | `HANDLER_BASE_URL` | Yes | Namespace prefix for handlers |
@@ -66,7 +67,9 @@ npm run test:e2e	   # Runs against netlify dev server
 │   ├── auth.ts           # DPoP token verification
 │   ├── config.ts         # Config loading
 │   ├── solidFetch.ts     # Authenticated fetch
-│   └── types.ts          # Shared types
+│   ├── types.ts          # Shared types
+│   ├── base-url.ts       # Generated at build time (gitignored)
+│   └── private-key.ts    # Generated at build time (gitignored)
 └── tests/
     ├── unit/
     ├── integration/
@@ -75,6 +78,8 @@ npm run test:e2e	   # Runs against netlify dev server
 
 ## Architecture
 
-- **DPoP authentication**: Tokens verified using `@solid/access-token-verifier`. Server identity keys generated at build time from `BASE_URL`, stored in `public/`.
+- **DPoP authentication**: Tokens verified using `@solid/access-token-verifier`. Server identity keys generated at build time.
+- **Private key**: Stored in `src/private-key.ts` (bundled into Lambda function, not publicly accessible).
+- **Public identity**: Stored in `public/` (jwks.json, webid, openid-configuration) for client verification.
 - **Webhook configuration**: RDF file loaded from `WEBHOOK_CONFIG_URL`, parsed using `n3`.
 - **Identity endpoints**: Server provides OIDC identity via static files in `public/` (`.well-known/openid-configuration`, `webid`, `jwks.json`).
