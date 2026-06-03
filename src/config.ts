@@ -1,7 +1,7 @@
 import type { Config } from './types.js'
+import { baseUrl } from './base-url.js'
 
 export interface EnvConfig {
-  BASE_URL: string
   WEBID: string
   ISSUER: string
   WHITELISTED_ISSUERS: string
@@ -12,11 +12,6 @@ export interface EnvConfig {
 }
 
 export function loadConfig(): Config {
-  const baseUrl = process.env.BASE_URL
-  if (!baseUrl) {
-    throw new Error('BASE_URL is required')
-  }
-
   const whitelistedIssuersStr = process.env.WHITELISTED_ISSUERS
   if (!whitelistedIssuersStr) {
     throw new Error('WHITELISTED_ISSUERS is required')

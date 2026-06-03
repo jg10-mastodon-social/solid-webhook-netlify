@@ -7,7 +7,7 @@
   node_bundler = "esbuild"
 
 [context.dev.environment]
-  BASE_URL = "http://localhost:9999"
+  DEPLOY_URL = "http://localhost:9999"
   WEBID = "http://localhost:9999/webid"
   ISSUER = "http://localhost:9999"
   WHITELISTED_ISSUERS = "http://localhost:9999"

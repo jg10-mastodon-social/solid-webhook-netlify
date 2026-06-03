@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import type { Context } from '@netlify/functions'
 
+vi.mock('../../src/base-url.js', () => ({
+  baseUrl: 'http://localhost:9999'
+}))
+
 beforeAll(() => {
   process.env.WHITELISTED_ISSUERS = 'https://issuer.example'
   process.env.WEBHOOK_CONFIG_URL = 'https://pod.example.com/webhooks.ttl'
-  process.env.BASE_URL = 'http://localhost:9999'
   process.env.WEBID = 'http://localhost:9999/webid'
   process.env.ISSUER = 'http://localhost:9999'
   process.env.HANDLER_BASE_URL = 'https://example.com/handlers#'

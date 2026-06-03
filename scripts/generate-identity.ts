@@ -10,12 +10,25 @@ const rootDir = path.resolve(__dirname, '..')
 
 const publicDir = path.join(rootDir, 'public')
 const envPath = path.join(rootDir, '.env')
+const baseUrlPath = path.join(rootDir, 'src/base-url.ts')
 
-const baseUrl = process.env.BASE_URL
+const context = process.env.CONTEXT
+let baseUrl: string | undefined
+
+console.log("CONTEXT", context)
+if (context === 'production') {
+  baseUrl = process.env.URL
+} else {
+  baseUrl = process.env.DEPLOY_URL || process.env.URL
+}
+
 if (!baseUrl) {
-  console.error('BASE_URL is required')
+  console.error('URL (for production) or DEPLOY_URL (for previews) is required')
   process.exit(1)
 }
+
+fs.writeFileSync(baseUrlPath, `export const baseUrl = '${baseUrl}'\n`)
+console.log(`Written: ${baseUrlPath}`)
 
 const webId = process.env.WEBID || `${baseUrl}/webid`
 const issuer = process.env.ISSUER || baseUrl
