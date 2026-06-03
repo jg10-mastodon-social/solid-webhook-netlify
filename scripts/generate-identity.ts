@@ -9,8 +9,8 @@ const __dirname = path.dirname(__filename)
 const rootDir = path.resolve(__dirname, '..')
 
 const publicDir = path.join(rootDir, 'public')
-const envPath = path.join(rootDir, '.env')
 const baseUrlPath = path.join(rootDir, 'src/base-url.ts')
+const privateKeyPath = path.join(rootDir, 'src/private-key.ts')
 
 const context = process.env.CONTEXT
 let baseUrl: string | undefined
@@ -124,18 +124,8 @@ async function generateIdentity() {
   fs.writeFileSync(webidPath, webidTurtle)
   console.log(`Written: ${webidPath}`)
 
-  if (!existingJwks) {
-    let envContent = ''
-    if (fs.existsSync(envPath)) {
-      envContent = fs.readFileSync(envPath, 'utf-8')
-      const lines = envContent.split('\n').filter(line => !line.startsWith('JWKS='))
-      envContent = lines.join('\n') + '\n'
-    }
-
-    const jwksEnvVar = `JWKS=${JSON.stringify(privateJwk)}`
-    fs.writeFileSync(envPath, envContent + jwksEnvVar + '\n')
-    console.log(`Written: ${envPath} (JWKS env var)`)
-  }
+  fs.writeFileSync(privateKeyPath, `export const privateKey = ${JSON.stringify(privateJwk)}\n`)
+  console.log(`Written: ${privateKeyPath}`)
 
   console.log('Identity files generated successfully')
 }

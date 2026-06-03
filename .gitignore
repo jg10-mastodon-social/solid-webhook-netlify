@@ -4,3 +4,5 @@ public/
 *.log
 # Local Netlify folder
 .netlify
+src/base-url.ts
+src/private-key.ts

@@ -2,35 +2,11 @@ import { importJWK, calculateJwkThumbprint, SignJWT } from 'jose'
 import { buildAuthenticatedFetch, generateDpopKeyPair } from '@inrupt/solid-client-authn-core'
 import { randomUUID } from 'node:crypto'
 import type { SolidFetch } from './types.js'
-
-let jwksPrivateKey: Awaited<ReturnType<typeof importJWK>> | undefined
-let jwksKid: string | undefined
-
-async function getJwksPrivateKey() {
-  if (!jwksPrivateKey) {
-    const jwksEnv = process.env.JWKS
-    if (!jwksEnv) {
-      throw new Error('JWKS environment variable is required')
-    }
-    try {
-      const jwks = JSON.parse(jwksEnv)
-      if (!jwks.kid) {
-        throw new Error('JWKS missing required kid field')
-      }
-      jwksPrivateKey = await importJWK(jwks, 'ES256')
-      jwksKid = jwks.kid
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('kid')) {
-        throw e
-      }
-      throw new Error('Failed to parse JWKS environment variable')
-    }
-  }
-  return jwksPrivateKey
-}
+// @ts-ignore
+import { privateKey } from './private-key.js'
 
 export async function createSolidFetch(webId: string, issuer: string): Promise<SolidFetch> {
-  const privateKey = await getJwksPrivateKey()
+  const privateKeyObject = await importJWK(privateKey, 'ES256')
   const dpopKey = await generateDpopKeyPair()
   const jkt = await calculateJwkThumbprint(dpopKey.publicKey, 'sha256')
 
@@ -40,13 +16,13 @@ export async function createSolidFetch(webId: string, issuer: string): Promise<S
     sub: webId,
     cnf: { jkt },
   })
-    .setProtectedHeader({ alg: 'ES256', typ: 'at+jwt', kid: jwksKid })
+    .setProtectedHeader({ alg: 'ES256', typ: 'at+jwt', kid: privateKey.kid })
     .setIssuedAt(now)
     .setExpirationTime(now + 3600)
     .setAudience('solid')
     .setIssuer(issuer)
     .setJti(randomUUID())
-    .sign(privateKey)
+    .sign(privateKeyObject)
 
   return buildAuthenticatedFetch(token, { dpopKey }) as unknown as SolidFetch
 }

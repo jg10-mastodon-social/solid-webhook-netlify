@@ -139,16 +139,11 @@ describe('webhook e2e tests', () => {
   })
 
   it('returns 500 when config fetch fails with 404', async () => {
-    const fs = await import('fs')
     const { importJWK, SignJWT, calculateJwkThumbprint, generateKeyPair, exportJWK } = await import('jose')
     const { randomUUID, createHash } = await import('crypto')
+    // @ts-ignore
+    const { privateKey: identityKey } = await import('../../src/private-key.js')
 
-    const jwksEnv = fs.readFileSync('./.env', 'utf-8')
-    const jwksMatch = jwksEnv.match(/^JWKS=(.+)$/m)
-    if (!jwksMatch) {
-      throw new Error('JWKS not found in .env')
-    }
-    const identityKey = JSON.parse(jwksMatch[1])
     const identityPrivateKey = await importJWK(identityKey, 'ES256')
     const identityKid = identityKey.kid
 

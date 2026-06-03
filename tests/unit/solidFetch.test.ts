@@ -1,4 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+const mockPrivateKey = {
+  kty: 'EC',
+  crv: 'P-256',
+  x: 'test-x',
+  y: 'test-y',
+  d: 'test-d',
+  kid: 'test-kid',
+  alg: 'ES256',
+  use: 'sig',
+}
+
+vi.mock('./private-key.js', () => ({
+  privateKey: mockPrivateKey,
+}))
 
 vi.mock('@inrupt/solid-client-authn-core', () => ({
   generateDpopKeyPair: vi.fn().mockResolvedValue({
@@ -34,30 +49,13 @@ const mockFetch = vi.fn().mockResolvedValue(
 )
 
 describe('solidFetch', () => {
-  const originalEnv = process.env
-
   beforeEach(() => {
     vi.resetModules()
-    process.env = { ...originalEnv }
-    process.env.JWKS = JSON.stringify({
-      kty: 'EC',
-      crv: 'P-256',
-      x: 'test-x',
-      y: 'test-y',
-      d: 'test-d',
-      kid: 'test-kid',
-      alg: 'ES256',
-      use: 'sig',
-    })
     vi.clearAllMocks()
   })
 
-  afterEach(() => {
-    process.env = originalEnv
-  })
-
   describe('createSolidFetch', () => {
-    it('imports JWKS from env var', async () => {
+    it('imports private key from generated file', async () => {
       const { importJWK } = await import('jose')
       const { createSolidFetch } = await import('../../src/solidFetch.js')
 
@@ -66,6 +64,21 @@ describe('solidFetch', () => {
       expect(importJWK).toHaveBeenCalledWith(
         expect.objectContaining({ kty: 'EC', crv: 'P-256' }),
         'ES256'
+      )
+    })
+
+    it('uses kid from private key', async () => {
+      const { SignJWT } = await import('jose')
+      const { createSolidFetch } = await import('../../src/solidFetch.js')
+
+      await createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
+
+      expect(SignJWT).toHaveBeenCalledWith(
+        expect.objectContaining({
+          webid: 'https://pod.example.com/profile/card#me',
+          sub: 'https://pod.example.com/profile/card#me',
+          cnf: { jkt: 'test-jkt' },
+        })
       )
     })
 
@@ -119,52 +132,6 @@ describe('solidFetch', () => {
 
       expect(response.ok).toBe(true)
       expect(mockFetch).toHaveBeenCalled()
-    })
-
-    it('throws if JWKS env var is missing', async () => {
-      delete process.env.JWKS
-
-      const { createSolidFetch } = await import('../../src/solidFetch.js')
-
-      await expect(
-        createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
-      ).rejects.toThrow()
-    })
-
-    it('throws if JWKS env var is invalid JSON', async () => {
-      process.env.JWKS = 'not valid json'
-
-      const { createSolidFetch } = await import('../../src/solidFetch.js')
-
-      await expect(
-        createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
-      ).rejects.toThrow()
-    })
-
-    it('throws if JWKS env var is missing kid', async () => {
-      process.env.JWKS = JSON.stringify({
-        kty: 'EC',
-        crv: 'P-256',
-        x: 'test-x',
-        y: 'test-y',
-        d: 'test-d',
-        alg: 'ES256',
-        use: 'sig',
-      })
-
-      const { createSolidFetch } = await import('../../src/solidFetch.js')
-
-      await expect(
-        createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
-      ).rejects.toThrow('kid')
-    })
-
-    it('uses kid from JWKS env var', async () => {
-      const { createSolidFetch } = await import('../../src/solidFetch.js')
-
-      await expect(
-        createSolidFetch('https://pod.example.com/profile/card#me', 'https://pod.example.com')
-      ).resolves.toBeDefined()
     })
   })
 })

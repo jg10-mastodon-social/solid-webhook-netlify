@@ -1,4 +1,5 @@
 import type { Config } from './types.js'
+// @ts-ignore
 import { baseUrl } from './base-url.js'
 
 export interface EnvConfig {

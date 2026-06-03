@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const rootDir = path.resolve(__dirname, '../..')
 const baseUrlPath = path.join(rootDir, 'src/base-url.ts')
+const privateKeyPath = path.join(rootDir, 'src/private-key.ts')
 
 async function runScript(jwks?: string, context?: string): Promise<{ exitCode: number, stdout: string, stderr: string }> {
   return new Promise((resolve) => {
@@ -64,6 +65,9 @@ describe('generate-identity', () => {
     if (fs.existsSync(baseUrlPath)) {
       fs.unlinkSync(baseUrlPath)
     }
+    if (fs.existsSync(privateKeyPath)) {
+      fs.unlinkSync(privateKeyPath)
+    }
   })
 
   afterEach(() => {
@@ -75,6 +79,9 @@ describe('generate-identity', () => {
     }
     if (fs.existsSync(baseUrlPath)) {
       fs.unlinkSync(baseUrlPath)
+    }
+    if (fs.existsSync(privateKeyPath)) {
+      fs.unlinkSync(privateKeyPath)
     }
   })
 
@@ -150,9 +157,9 @@ describe('generate-identity', () => {
     it('generates new key pair', async () => {
       await runScript()
 
-      expect(fs.existsSync(envPath)).toBe(true)
-      const envContent = fs.readFileSync(envPath, 'utf-8')
-      expect(envContent).toContain('JWKS=')
+      expect(fs.existsSync(privateKeyPath)).toBe(true)
+      const content = fs.readFileSync(privateKeyPath, 'utf-8')
+      expect(content).toContain('export const privateKey')
     })
 
     it('writes public/jwks.json', async () => {
@@ -196,7 +203,7 @@ describe('generate-identity', () => {
       expect(result.stderr).toContain('kid')
     })
 
-    it('does not generate new key pair (does not overwrite .env)', async () => {
+    it('does not write to .env', async () => {
       const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'test-x', y: 'test-y', d: 'test-d', alg: 'ES256', use: 'sig', kid: 'test-kid' })
 
       fs.writeFileSync(envPath, 'EXISTING=value\n')
@@ -205,6 +212,15 @@ describe('generate-identity', () => {
 
       const envContent = fs.readFileSync(envPath, 'utf-8')
       expect(envContent).toBe('EXISTING=value\n')
+    })
+
+    it('writes private key to src/private-key.ts', async () => {
+      const existingJwks = JSON.stringify({ kty: 'EC', crv: 'P-256', x: 'Ume6Ll4M4KINn10XYvKcRwdowi7P2lYTQpI41aBg3qc', y: '0v4HYYHF-UB61yiS2RxgXnbCaW7C82GvpauQS0ScTBU', d: 'test-d', alg: 'ES256', use: 'sig', kid: 'my-test-kid' })
+      await runScript(existingJwks)
+
+      expect(fs.existsSync(privateKeyPath)).toBe(true)
+      const content = fs.readFileSync(privateKeyPath, 'utf-8')
+      expect(content).toContain('export const privateKey')
     })
 
     it('writes public/jwks.json using kid from JWKS', async () => {
@@ -235,21 +251,15 @@ describe('generate-identity', () => {
       expect(jwks.keys[0].kid.length).toBeGreaterThan(10)
     })
 
-    it('sets same kid in JWKS env var', async () => {
+    it('writes private key with same kid to src/private-key.ts', async () => {
       await runScript()
-
-      const envContent = fs.readFileSync(envPath, 'utf-8')
-      const match = envContent.match(/^JWKS=(.+)$/m)
-      expect(match).toBeTruthy()
-
-      const jwksEnv = JSON.parse(match![1])
-      expect(jwksEnv).toHaveProperty('kid')
-      expect(jwksEnv.kid).toBeDefined()
 
       const jwksPath = path.join(publicDir, 'jwks.json')
       const jwks = JSON.parse(fs.readFileSync(jwksPath, 'utf-8'))
+      const expectedKid = jwks.keys[0].kid
 
-      expect(jwksEnv.kid).toBe(jwks.keys[0].kid)
+      const content = fs.readFileSync(privateKeyPath, 'utf-8')
+      expect(content).toContain(`"kid":"${expectedKid}"`)
     })
   })
 })
