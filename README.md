@@ -19,6 +19,36 @@ npm install
 netlify build --context=dev
 ```
 
+### Granting the service access to your pod
+
+This service authenticates to your Solid pod using its own WebID. After
+deployment, that WebID is served at `${BASE_URL}/webid` (or whatever you
+set via the `WEBID` env var). It is the identity that appears in
+authenticated fetches to your pod.
+
+The webhook config at `WEBHOOK_CONFIG_URL` declares one or more
+*handlers* (RDF resources in the `HANDLER_BASE_URL` namespace) that
+react to events on your pod. You need to grant the service's WebID
+**two separate kinds of access**, both via your pod's Sharing/Access
+control UI:
+
+1. **Read access on the webhook config file** (`WEBHOOK_CONFIG_URL`).
+   The service reads this file on every webhook delivery to load the
+   handler definitions.
+
+2. **Whatever access each handler needs on the resources accessed by each handler.** Handlers are user-defined and may read, write, append, or
+   delete data on your pod on your behalf. For each handler, grant the
+   service's WebID the minimum permissions it requires (`Read`,
+   `Write`, `Append`, and/or `Delete`) on the relevant resources or
+   their containing containers. Most non-trivial handlers will need
+   `Write` or `Append`.
+
+A `403` in the function logs against `WEBHOOK_CONFIG_URL` means the
+config ACL is missing; a `403` from a downstream request made by a
+handler means the handler's target resource is not authorized. See the
+[WAC spec](https://solid.github.io/web-access-control-spec/) for the
+underlying protocol and manual `.acl` authoring.
+
 Build time generates:
 - `src/base-url.ts` - site URL (gitignored)
 - `src/private-key.ts` - private key for signing (gitignored)
